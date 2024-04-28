@@ -1,3 +1,4 @@
+import uuid
 from utils.download import DL_STATUS
 import aiohttp
 from config import *
@@ -28,6 +29,12 @@ def generate_random_string(length=8):
     return ''.join(random.choice(letters_and_digits) for _ in range(length))
 
 
+def generate_unique_filename(filename):
+    """Generate a unique filename by appending a UUID."""
+    unique_id = uuid.uuid4().hex[:6]  # Get the first 6 characters of a randomly generated UUID
+    name, ext = os.path.splitext(filename)
+    return f"{name}_{unique_id}{ext}"
+
 
 def render_template(name):
     with open(f"templates/{name}") as f:
@@ -37,30 +44,42 @@ def render_template(name):
 async def upload_file(request):
     global UPLOAD_TASK
 
+    data = await request.post()
+
+    filename = data.get("filename")
+    if filename is None:
+        return web.Response(
+            text="No filename provided in the request body.",
+            status=400,
+            content_type="text/plain"
+        )
+
     reader = await request.multipart()
     field = await reader.next()
 
     content_disposition = field.headers.get('Content-Disposition')
-    filename = re.findall('filename="(.+)"', content_disposition)[0]
+    if content_disposition:
+        original_filename = re.findall('filename="(.+)"', content_disposition)[0]
+    else:
+        return web.Response(
+            text="Content-Disposition header not found.",
+            status=400,
+            content_type="text/plain"
+        )
 
-    if field is None:
-        return web.Response(text="No file uploaded.", content_type="text/plain")
-
-    if allowed_file(filename):
-        if filename == "":
+    if allowed_file(original_filename):
+        if original_filename == "":
             return web.Response(
                 text="No file selected.", content_type="text/plain", status=400
             )
 
-        filename = secure_filename(filename)
-        extension = filename.rsplit(".", 1)[1]
-        hash = generate_random_string()
+        original_filename = secure_filename(original_filename)
+        extension = original_filename.rsplit(".", 1)[1]
 
-        while is_hash_in_db(filename, hash):
-            hash = generate_random_string()
+        new_filename = generate_unique_filename(filename)
 
         try:
-            async with aiofiles.open(os.path.join("static/uploads", filename), "wb") as f:
+            async with aiofiles.open(os.path.join("static/uploads", new_filename), "wb") as f:
                 while True:
                     chunk = await field.read_chunk()
                     if not chunk:
@@ -74,22 +93,24 @@ async def upload_file(request):
             )
 
         # Save original filename and hash in database
-        save_file_in_db(filename, hash)
-        UPLOAD_TASK.append((hash, filename, extension))
-        return web.Response(text=hash, content_type="text/plain", status=200)
+        hash = get_file_hash(new_filename)  # Assuming you have a function to generate a hash for the file
+        save_file_in_db(new_filename, hash)
+        UPLOAD_TASK.append((hash, new_filename, extension))
+        return web.Response(text=new_filename, content_type="text/plain", status=200)
     else:
         return web.Response(
             text="File type not allowed", status=400, content_type="text/plain"
         )
 
 
-
 async def home(_):
     return web.Response(text=render_template("minindex.html"), content_type="text/html")
+
 
 async def bot_status(_):
     json = work_loads
     return web.json_response(json)
+
 
 async def remote_upload(request):
     global aiosession
@@ -121,20 +142,32 @@ async def remote_upload(request):
 
         filename = secure_filename(filename)
         extension = filename.rsplit(".", 1)[1]
-        hash = generate_random_string()
 
-        while is_hash_in_db(filename, hash):
-            filename = filename
-            hash = generate_random_string()
+        new_filename = generate_unique_filename(filename)
 
-        print("Remote upload", filename)
-        loop.create_task(start_remote_upload(aiosession, filename, link))
-        return web.Response(text=filename, content_type="text/plain", status=200)
+        try:
+            async with aiofiles.open(os.path.join("static/uploads", new_filename), "wb") as f:
+                while True:
+                    chunk = await field.read_chunk()
+                    if not chunk:
+                        break
+                    await f.write(chunk)
+        except Exception as e:
+            return web.Response(
+                text=f"Error saving file: {str(e)}",
+                status=500,
+                content_type="text/plain",
+            )
+
+        # Save original filename and hash in database
+        hash = get_file_hash(new_filename)  # Assuming you have a function to generate a hash for the file
+        save_file_in_db(new_filename, hash)
+        UPLOAD_TASK.append((hash, new_filename, extension))
+        return web.Response(text=new_filename, content_type="text/plain", status=200)
     else:
         return web.Response(
             text="File type not allowed", status=400, content_type="text/plain"
         )
-
 
 
 async def file_html(request):
@@ -194,7 +227,7 @@ async def remote_status(request):
 async def download(request: web.Request):
     filename = request.match_info["filename"]
     hash = request.match_info["hash"]
-    id = is_hash_in_db(filename,hash)
+    id = is_hash_in_db(filename, hash)
     if id:
         id = id["msg_id"]
         return await media_streamer(request, id)
