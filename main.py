@@ -95,7 +95,7 @@ async def remote_upload(request):
     global aiosession
     hash = generate_random_string()
     print(request.headers)
-    link = request.headers["url"]
+    link = request.headers.get("url")
 
     reader = await request.multipart()
     field = await reader.next()
@@ -104,7 +104,14 @@ async def remote_upload(request):
         return web.Response(text="No file uploaded.", content_type="text/plain")
 
     content_disposition = field.headers.get('Content-Disposition')
-    filename = re.findall('filename="(.+)"', content_disposition)[0]
+    if content_disposition:
+        filename = re.findall('filename="(.+)"', content_disposition)[0]
+    else:
+        return web.Response(
+            text="Content-Disposition header not found.",
+            status=400,
+            content_type="text/plain"
+        )
 
     if allowed_file(filename):
         if filename == "":
@@ -127,6 +134,7 @@ async def remote_upload(request):
         return web.Response(
             text="File type not allowed", status=400, content_type="text/plain"
         )
+
 
 
 async def file_html(request):
