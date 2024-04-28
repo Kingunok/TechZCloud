@@ -12,11 +12,21 @@ from utils.file import allowed_file, delete_cache, get_file_hash
 from utils.tgstreamer import media_streamer
 from utils.upload import upload_file_to_channel
 from utils.upload import PROGRESS
-
+import aiofiles
+import re
+import string
+import random
 
 from aiohttp import web
 
 app = web.Application()
+
+
+def generate_random_string(length=8):
+    """Generate a random string of lowercase letters and digits."""
+    letters_and_digits = string.ascii_lowercase + string.digits
+    return ''.join(random.choice(letters_and_digits) for _ in range(length))
+
 
 
 def render_template(name):
