@@ -20,7 +20,7 @@ async def upload_file_to_channel(hash, filename, extension):
     print("Uploading file to channel")
     PROGRESS[hash] = {}
     file = await app.send_document(
-        -1001901516995,
+        -1002096248753,
         f"static/uploads/{filename}{hash}.{extension}",
         caption=f"{hash} | {filename}",
         progress=upload_progress,
