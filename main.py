@@ -29,7 +29,9 @@ async def upload_file(request):
 
     reader = await request.multipart()
     field = await reader.next()
-    filename = field.filename
+
+    content_disposition = field.headers.get('Content-Disposition')
+    filename = re.findall('filename="(.+)"', content_disposition)[0]
 
     if field is None:
         return web.Response(text="No file uploaded.", content_type="text/plain")
@@ -42,22 +44,18 @@ async def upload_file(request):
 
         filename = secure_filename(filename)
         extension = filename.rsplit(".", 1)[1]
-        hash = get_file_hash()
+        hash = generate_random_string()
 
-        while is_hash_in_db(filename,hash):
-            filename = get_file_hash()
-            hash = get_file_hash()
-            print(filename,hash)
+        while is_hash_in_db(filename, hash):
+            hash = generate_random_string()
 
         try:
-            with open(
-                os.path.join("static/uploads", filename + "." + extension + hash), "wb"
-            ) as f:
+            async with aiofiles.open(os.path.join("static/uploads", filename), "wb") as f:
                 while True:
                     chunk = await field.read_chunk()
                     if not chunk:
                         break
-                    f.write(chunk)
+                    await f.write(chunk)
         except Exception as e:
             return web.Response(
                 text=f"Error saving file: {str(e)}",
@@ -65,13 +63,15 @@ async def upload_file(request):
                 content_type="text/plain",
             )
 
-        save_file_in_db(filename,hash)
-        UPLOAD_TASK.append((hash,filename, extension))
-        return web.Response(text=filename, content_type="text/plain", status=200)
+        # Save original filename and hash in database
+        save_file_in_db(filename, hash)
+        UPLOAD_TASK.append((hash, filename, extension))
+        return web.Response(text=hash, content_type="text/plain", status=200)
     else:
         return web.Response(
             text="File type not allowed", status=400, content_type="text/plain"
         )
+
 
 
 async def home(_):
