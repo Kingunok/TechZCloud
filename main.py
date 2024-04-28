@@ -44,13 +44,14 @@ async def upload_file(request):
         extension = filename.rsplit(".", 1)[1]
         hash = get_file_hash()
 
-        while is_hash_in_db(filename):
+        while is_hash_in_db(filename,hash):
             filename = get_file_hash()
-            print(filename)
+            hash = get_file_hash()
+            print(filename,hash)
 
         try:
             with open(
-                os.path.join("static/uploads", filename + "." + extension), "wb"
+                os.path.join("static/uploads", filename + "." + extension + hash), "wb"
             ) as f:
                 while True:
                     chunk = await field.read_chunk()
@@ -64,9 +65,9 @@ async def upload_file(request):
                 content_type="text/plain",
             )
 
-        save_file_in_db(filename)
-        UPLOAD_TASK.append((filename, extension))
-        return web.Response(text=hash, content_type="text/plain", status=200)
+        save_file_in_db(filename,hash)
+        UPLOAD_TASK.append((hash,filename, extension))
+        return web.Response(text=filename, content_type="text/plain", status=200)
     else:
         return web.Response(
             text="File type not allowed", status=400, content_type="text/plain"
@@ -86,8 +87,9 @@ async def remote_upload(request):
     print(request.headers)
     link = request.headers["url"]
 
-    while is_hash_in_db(filename):
+    while is_hash_in_db(filename,hash):
         filename = get_file_hash()
+        hash = get_file_hash()
 
     print("Remote upload", filename)
     loop.create_task(start_remote_upload(aiosession, filename, link))
@@ -96,7 +98,8 @@ async def remote_upload(request):
 
 async def file_html(request):
     filename = request.match_info["filename"]
-    download_link = f"http://cloud.techzbots.live/dl/{filename}"
+    hash = request.match_info["hash"]
+    download_link = f"http://cloud.techzbots.live/dl/{filename}{hash}"
     filename = is_hash_in_db(filename)["filename"]
 
     return web.Response(
@@ -114,6 +117,7 @@ async def static_files(request):
 async def process(request):
     global PROGRESS
     filename = request.match_info["filename"]
+    hash = request.match_info["hash"]
 
     data = PROGRESS.get(filename)
     if data:
@@ -131,9 +135,9 @@ async def process(request):
 async def remote_status(request):
     global DL_STATUS
     print(DL_STATUS)
-    filename = request.match_info["filename"]
+    hash = request.match_info["hash"]
 
-    data = DL_STATUS.get(filename)
+    data = DL_STATUS.get(hash)
     if data:
         if data.get("message"):
             data = {"message": data["message"]}
@@ -147,8 +151,9 @@ async def remote_status(request):
 
 
 async def download(request: web.Request):
-    hash = request.match_info["filename"]
-    id = is_hash_in_db(filename)
+    filename = request.match_info["filename"]
+    hash = request.match_info["hash"]
+    id = is_hash_in_db(filename,hash)
     if id:
         id = id["msg_id"]
         return await media_streamer(request, id)
@@ -193,12 +198,12 @@ async def start_server():
 
     app.router.add_get("/", home)
     app.router.add_get("/static/{file}", static_files)
-    app.router.add_get("/dl/{filename}", download)
-    app.router.add_get("/file/{filename}", file_html)
+    app.router.add_get("/dl/{filename}{hash}", download)
+    app.router.add_get("/file/{filename}{hash}", file_html)
     app.router.add_post("/upload", upload_file)
-    app.router.add_get("/process/{filename}", process)
+    app.router.add_get("/process/{filename}{hash}", process)
     app.router.add_post("/remote_upload", remote_upload)
-    app.router.add_get("/remote_status/{filename}", remote_status)
+    app.router.add_get("/remote_status/{filename}{hash}", remote_status)
     app.router.add_get("/bot_status", bot_status)
 
     aiosession = aiohttp.ClientSession()
