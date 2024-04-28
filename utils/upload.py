@@ -21,7 +21,7 @@ async def upload_file_to_channel(hash, filename, extension):
     PROGRESS[hash] = {}
     file = await app.send_document(
         -1001901516995,
-        f"static/uploads/{hash}.{extension}",
+        f"static/uploads/{filename}{hash}.{extension}",
         caption=f"{hash} | {filename}",
         progress=upload_progress,
         progress_args=(hash,),
@@ -31,7 +31,7 @@ async def upload_file_to_channel(hash, filename, extension):
 
     PROGRESS[hash]["message"] = file.id
     print("Uploaded file to channel")
-    os.remove(f"static/uploads/{hash}.{extension}")
+    os.remove(f"static/uploads/{filename}{hash}.{extension}")
 
 
 async def upload_progress(current, total, hash):
