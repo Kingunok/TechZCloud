@@ -4,8 +4,8 @@ import mimetypes
 DL_STATUS = {}
 
 
-async def download_file(session, hash, url):
-    print("Downloading", hash, url)
+async def download_file(session,filename, hash, url):
+    print("Downloading", hash,filename, url)
     global DL_STATUS
 
     async with session.get(url) as response:
@@ -48,7 +48,7 @@ async def download_file(session, hash, url):
             ext = ext.lower().strip(" .")
 
         done = 0
-        async with aiofiles.open("static/uploads/" + hash + ".temp", "wb") as f:
+        async with aiofiles.open("static/uploads/" + filename + hash + ".temp", "wb") as f:
             async for data in response.content.iter_chunked(1024):
                 DL_STATUS[hash] = {
                     "total": total,
@@ -58,8 +58,8 @@ async def download_file(session, hash, url):
                 # print(done)
                 await f.write(data)
 
-        async with aiofiles.open("static/uploads/" + hash + ".temp", "rb") as f:
-            async with aiofiles.open("static/uploads/" + hash + "." + ext, "wb") as f2:
+        async with aiofiles.open("static/uploads/" + filename + hash + ".temp", "rb") as f:
+            async with aiofiles.open("static/uploads/" + filename + hash + "." + ext, "wb") as f2:
                 await f2.write(await f.read())
 
         DL_STATUS[hash] = {"message": "complete"}
