@@ -97,12 +97,14 @@ async def remote_upload(request):
     print(request.headers)
     link = request.headers["url"]
 
-
-    content_disposition = field.headers.get('Content-Disposition')
-    filename = re.findall('filename="(.+)"', content_disposition)[0]
+    reader = await request.multipart()
+    field = await reader.next()
 
     if field is None:
         return web.Response(text="No file uploaded.", content_type="text/plain")
+
+    content_disposition = field.headers.get('Content-Disposition')
+    filename = re.findall('filename="(.+)"', content_disposition)[0]
 
     if allowed_file(filename):
         if filename == "":
@@ -114,13 +116,17 @@ async def remote_upload(request):
         extension = filename.rsplit(".", 1)[1]
         hash = generate_random_string()
 
-    while is_hash_in_db(filename,hash):
-        filename = filename
-        hash = generate_random_string()
+        while is_hash_in_db(filename, hash):
+            filename = filename
+            hash = generate_random_string()
 
-    print("Remote upload", filename)
-    loop.create_task(start_remote_upload(aiosession, filename, link))
-    return web.Response(text=filename, content_type="text/plain", status=200)
+        print("Remote upload", filename)
+        loop.create_task(start_remote_upload(aiosession, filename, link))
+        return web.Response(text=filename, content_type="text/plain", status=200)
+    else:
+        return web.Response(
+            text="File type not allowed", status=400, content_type="text/plain"
+        )
 
 
 async def file_html(request):
