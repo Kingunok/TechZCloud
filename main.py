@@ -93,13 +93,30 @@ async def bot_status(_):
 
 async def remote_upload(request):
     global aiosession
-    hash = get_file_hash()
+    hash = generate_random_string()
     print(request.headers)
     link = request.headers["url"]
 
+
+    content_disposition = field.headers.get('Content-Disposition')
+    filename = re.findall('filename="(.+)"', content_disposition)[0]
+
+    if field is None:
+        return web.Response(text="No file uploaded.", content_type="text/plain")
+
+    if allowed_file(filename):
+        if filename == "":
+            return web.Response(
+                text="No file selected.", content_type="text/plain", status=400
+            )
+
+        filename = secure_filename(filename)
+        extension = filename.rsplit(".", 1)[1]
+        hash = generate_random_string()
+
     while is_hash_in_db(filename,hash):
-        filename = get_file_hash()
-        hash = get_file_hash()
+        filename = filename
+        hash = generate_random_string()
 
     print("Remote upload", filename)
     loop.create_task(start_remote_upload(aiosession, filename, link))
