@@ -1,8 +1,6 @@
 from pymongo import MongoClient
 print("Connecting to database...")
-client = MongoClient(
-    "mongodb+srv://techzbots:4tQYI1SD64nr8jz5@rankingsbot.h5std55.mongodb.net/?retryWrites=true&w=majority"
-)
+client = MongoClient("mongodb+srv://fino:fino@cluster0.ko0stef.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
 db = client["techzcloud"]
 filesdb = db["files"]
